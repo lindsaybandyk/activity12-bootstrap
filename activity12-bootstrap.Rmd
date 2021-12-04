@@ -1,6 +1,6 @@
 ---
 title: "Activity 12"
-author: "Name"
+author: "Lindsay Bandyk"
 output: github_document
 ---
 
@@ -14,6 +14,10 @@ knitr::opts_chunk$set(error = TRUE)
 In this activity you will be bootstrapping - a form of statistical inference that uses resampling methods.
 First, you will need `{tidyverse}` and `{infer}`.
 
+```{r}
+library(tidyverse)
+library(infer)
+```
 
 ### Data
 
@@ -63,12 +67,16 @@ Comment on the center, spread, and shape.
 
 **Response**:
 
+The center of the distribution is around 13/14.  There seems to be a bimodel distribution with a peak around 12 and another around 16.
+
 
 Suppose we're interested in making inference about the typical number of years of education that a person has completed and this is our representative sample.
 Is the mean a good statistic to use here to describe the typical value of salary?
 Why or why not?
 
 **Response**:
+
+I would argue that the mean is not a good statistic to describe the typical value of salary as most data is distributed on either side of the mean (bimodel).
 
 
 Recall from your introductory statistics course that a one-sample *t*-test requires that the sample mean is Normally distributed.
@@ -77,11 +85,16 @@ Why or why not?
 
 ***Response**:
 
+I would argue that due to the CLT, a sample statistic will conform to an approximately normal distribution with a large number of samples (no matter what the distribution is of the population).  Thus, we can reasonably assume the distribution of the sample mean is normal.
+
 
 Since our sample size is so large, the distribution of the *sample mean* is approximately Normal (the CLT!).
 The `t.test` function can be used to do a one-sample *t*-test and to find a 90% confidence interval for the mean number of years of education that US adults complete.
 Use this function to construct a 90% confidence interval for the mean number of years of education that US adults complete.
 
+```{r}
+t.test(gss$educ, conf.level=.9)
+```
 
 
 
@@ -124,18 +137,37 @@ Then, use the appropriate `purrr::map` function to calculate the mean for each o
 The last thing you want is those samples to change every time you knit your document because your interpretations might be slightly different so you will need to set a seed that is your birthday in `yymmdd` format (your instructor's seed would be set to the number `851217`).
 
 
+```{r}
+set.seed(950123)
+sample_1000 <- map(1:1000, ~sample(gss_educ$educ, size = length(gss_educ$educ), replace = TRUE))
+head(sample_1000)
+```
 
+```{r}
+sample_1000_means <- map(sample_1000, ~mean(.))
+head(sample_1000_means)
+```
 
+```{r}
+sample_1000_means <- unlist(sample_1000_means)
+head(sample_1000_means)
+```
 
 Now, use the `quantile` function with appropriate `probs` to get construct a 90% bootstrap confidence interval for the mean number of years of education that US adults complete.
 You will need to give some thought about what the lower and upper quantiles would be to identify the middle 90%.
 
 
+```{r}
+quantile(sample_1000_means, probs = c(.05, .95))
 
+```
+
+We are 90% confident that the true population education years falls between 13.65 and 13.83 years.
 
 
 Compare this bootstrap interval to your `t.test` confidence interval from above.
 
+We see that the 90% confidence interval for both methods is almost identical.
 
 
 ## Challenge: Other statistics
@@ -161,6 +193,20 @@ That is, your final dataframe would look like:
 Then, restructure this dataframe to create a faceted plot that displays histograms for each measure on center.
 You should assign this restructured dataframe to an R object to help you with the next task.
 
+```{r}
+bootstrap_sampler <- function(data, n) {
+  sample_n <- map(1:n, ~sample(data, size = length(data), replace = TRUE))
+  mean <- map(sample_n, ~mean(.))
+  median <- map(sample_n, ~median(.))
+  midhinge <- map(sample_n, ~((quantile(., probs = .25) + quantile(., probs = .75)) / 2))
+  output <- tibble(mean = unlist(mean), median = unlist(median), midhinge = unlist(midhinge))
+}
+```
+
+```{r}
+test <- bootstrap_sampler(gss_educ$educ, 1000)
+head(test)
+```
 
 
 
@@ -168,6 +214,23 @@ Using this restructured dataframe, compute 90% bootstrap confidence intervals *f
 For each, compare to your interval to the bootstrap interval for the *mean* that you computed first. 
 
 
+```{r}
+bootstrap_data <- bootstrap_sampler(gss_educ$educ, 1000)
+
+```
+
+```{r}
+quantile(bootstrap_data$mean, probs = c(.05, .95))
+
+```
+```{r}
+quantile(bootstrap_data$median, probs = c(.05, .95))
+
+```
+```{r}
+quantile(bootstrap_data$midhinge, probs = c(.05, .95))
+
+```
 
 
 Which of these statistics do you think is the best statistic to describe the number of years of education?
@@ -176,6 +239,8 @@ There is no single right answer to this question.
 Think about what each statistic is measuring, and decide whether that makes sense for this data.
 
 **Response**:
+
+I believe the median is the best statistic to describe the number of years of education.  This is because we are able to deterine a much more precise confidence interval (13.65, 13.82) vs (13, 14) or (14, 14).
 
 
 
@@ -201,17 +266,65 @@ Also, note that the levels of this variables are spelled inconsistently: "Extrem
 Since this is the spelling that shows up in the data, you need to make sure this is how you spell the levels in your code (quick) **OR** correct it in the data file (preferred).
 
 1. Create a new variable, i.e., recode `advfront` values, such that "Strongly agree" and "Agree" are converted to `"Yes"`, and "Disagree" and "Strongly disagree" are converted to `"No"`. The remaining levels can be left as is.
+```{r}
+head(gss)
+
+```
+```{r}
+new_gss <- gss %>% 
+  mutate(advfront = ifelse(advfront %in% c("Strongly agree", "Agree"), "Yes", ifelse(advfront %in% c("Strongly disagree", "Disagree"), "No", advfront)))
+head(new_gss)
+```
 
 2. Create a new variable, i.e., recode `polviews values`, such that "Extremely liberal", "Liberal", and "Slightly liberal", are converted to `"Liberal"`, and "Slghtly conservative", "Conservative", and "Extrmly conservative" are converted to `"Conservative"`. The remaining levels can be left as is.
 
+```{r}
+new_gss <- new_gss %>% 
+  mutate(polviews = ifelse(polviews %in% c("Extremely liberal", "Liberal", "Slightly liberal"), "Liberal", ifelse(polviews %in% c("Extrmly conservative", "Conservative", "Slghtly conservative"), "Conservative", polviews)))
+head(new_gss)
+```
+
+
 3. Filter the data for respondents who self-identified as "liberal" or "conservative" and who responded "yes" or "no" to the science research question. Save the resulting data frame with a different name so that you don't overwrite the data.
+
+```{r}
+filtered_new_gss <- new_gss %>% 
+  filter(polviews %in% c("Liberal", "Conservative"), advfront %in% c("Yes", "No"))
+head(filtered_new_gss)
+```
+
 
 4. Describe how you will use bootstrapping to estimate the difference in proportion of liberals and not liberals who think science research is necessary and should be supported by the federal government.
 
+```{r}
+test2 <- filtered_new_gss %>% 
+  mutate(combined = paste(polviews, ",", advfront))
+```
+
+
+```{r}
+sample_n <- map(1:1000, ~sample(test2$combined, size = length(test2$combined), replace = TRUE))
+
+```
+
+```{r}
+sample_liberal_yes <- map(sample_n, ~sum(str_count(., pattern = "Liberal , Yes")))
+sample_liberal_no <- map(sample_n, ~sum(str_count(., pattern = "Liberal , No")))
+sample_conservative_yes <- map(sample_n, ~sum(str_count(., pattern = "Conservative , Yes")))
+sample_conservative_no <- map(sample_n, ~sum(str_count(., pattern = "Conservative , Yes")))
+difference <- (unlist(sample_liberal_yes) / (unlist(sample_liberal_yes) + unlist(sample_liberal_no))) - (unlist(sample_conservative_yes) / (unlist(sample_conservative_yes) + unlist(sample_conservative_no)))
+head(difference)
+```
+
 5. Construct a 90% bootstrap confidence interval for the difference in proportion of liberals and conservatives who think science research is necessary and should be supported by the federal government. Interpret this interval in context of the data.
 
+```{r}
+quantile(difference, probs = c(.05, .95))
+```
 
 
+p(lib) - p(con)
+We are 90% confident that the true population proportion of proportion differences between liberals and conservatives who support science research is between 35.68 and 41.17 percent.
 
 
 ## Attribution
